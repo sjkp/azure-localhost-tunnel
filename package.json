@@ -1,13 +1,16 @@
 {
-  "name": "hyco-websocket-tunnel",
+  "name": "azure-localhost-tunnel",
   "version": "1.0.0",
   "repository" : {
         "type" : "git",
-        "url" : "git://github.com/Azure/azure-relay-node.git"
+        "url" : "git://github.com/sjkp/azure-localhost-tunnel.git"
     },
   "dependencies": {
     "optimist": "^0.3.1",
     "hyco-websocket": "^1.0.4",
     "wordwrap": "^0.0.2"
-  }
+  },
+   "scripts": {
+        "start": "node connect.js sjkprelay2.servicebus.windows.net test send li5yODGgKlxskfY4vYrTDWtVQM7fYIHe57ySwvKwYDg="
+    }
 }

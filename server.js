@@ -35,8 +35,8 @@ if (argv.pidfile) {
 
 var users = loadUsers();
 
-if (argv._.length < 4) {
-  console.log('server.js [namespace] [path] [key-rule] [key]')
+if (argv._.length < 6) {
+  console.log('server.js [namespace] [path] [key-rule] [key] [host] [port]')
   process.exit(1);
 }
 
@@ -44,6 +44,8 @@ var ns = argv._[0];
 var path = argv._[1];
 var keyrule = argv._[2];
 var key = argv._[3];
+var host = argv._[4];
+var port = argv._[5];
 
 var wsServer = new WebSocketServer({
   server: WebSocket.createRelayListenUri(ns, path),
@@ -61,8 +63,8 @@ wsServer.on('request', function(request) {
   console.log(request);
  // if (action == 'tunnel') {
     console.log('tunnel');
-    createTunnel(request, params.port, params.host);
-    //createTunnel(request, 7071, '127.0.0.1');
+    //createTunnel(request, params.port, params.host);
+    createTunnel(request, port, host);
  /* } else {
     request.reject(404);
   }*/
@@ -83,11 +85,11 @@ function authenticate(request) {
 
 function createTunnel(request, port, host) {
   console.log('authentictted');
-  if (!authenticate(request.httpRequest)) {
+  // if (!authenticate(request.httpRequest)) {
     
-    request.reject(403);
-    return;
-  }
+  //   request.reject(403);
+  //   return;
+  // }
   request.accept(null, null, null, function(webSock) {
     console.log(webSock.remoteAddress + ' connected - Protocol Version ' + webSock.webSocketVersion);
 

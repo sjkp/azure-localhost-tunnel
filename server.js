@@ -1,157 +1,101 @@
-var fs = require('fs');
-var net = require('net');
-var urlParse = require('url').parse;
+var https = require('https');
+var tunnel = require('./lib/tunnel');
 var WebSocket = require('hyco-websocket');
-var WebSocketServer = require('hyco-websocket').relayedServer;
-
-process.chdir(__dirname);
 
 var argv = require('optimist').argv;
-var pidfile;
 
-//kill an already running instance
-if (argv.kill) {
-  pidfile = argv.kill;
-  if (!pidfile.match(/\.pid$/i))
-    pidfile += '.pid';
-  try {
-    var pid = fs.readFileSync(pidfile, 'utf8');
-    fs.unlinkSync(pidfile);
-    process.kill(parseInt(pid, 10));
-    console.log('Killed process ' + pid);
-  } catch (e) {
-    console.log('Error killing process ' + (pid || argv.kill));
-  }
-  process.exit();
-}
 
-//write pid to file so it can be killed with --kill
-if (argv.pidfile) {
-  pidfile = argv.pidfile;
-  if (!pidfile.match(/\.pid$/i))
-    pidfile += '.pid';
-  fs.writeFileSync(pidfile, process.pid);
-}
 
-var users = loadUsers();
+var ns = process.env.RELAYNAMESPACE;
+var path = process.env.RELAYPATH;
+var keyrule = process.env.RELAYRULENAME;
+var key = process.env.RELAYKEY;
 
-if (argv._.length < 6) {
-  console.log('server.js [namespace] [path] [key-rule] [key] [host] [port]')
+var host = process.env.PORT;
+
+var credentials, tunnels = [];
+
+if ((!ns && !path && !keyrule && !host)) {
+  if (argv._.length < 4)
+  {
+  console.log('connect.js [namespace] [path] [key-rule] [key] [hostport]')
   process.exit(1);
-}
-
-var ns = argv._[0];
-var path = argv._[1];
-var keyrule = argv._[2];
-var key = argv._[3];
-var host = argv._[4];
-var port = argv._[5];
-
-var wsServer = new WebSocketServer({
-  server: WebSocket.createRelayListenUri(ns, path),
-  token: function() {
-    return WebSocket.createRelayToken('http://' + ns, keyrule, key);
   }
-});
-
-wsServer.on('request', function(request) {
-  var url = urlParse(request.resource, true);
-  var args = url.pathname.split('/').slice(1);
-  var action = args.shift();
-  var params = url.query;
-  
-  console.log(request);
- // if (action == 'tunnel') {
-    console.log('tunnel');
-    //createTunnel(request, params.port, params.host);
-    createTunnel(request, port, host);
- /* } else {
-    request.reject(404);
-  }*/
-});
-
-function authenticate(request) {
-  var encoded = request.headers['authorization'] || '', credentials;
-  encoded = encoded.replace(/Basic /i, '');
-  try {
-    credentials = new Buffer(encoded, 'base64').toString('utf8').split(':');
-  } catch (e) {
-    credentials = [];
+  else {
+      ns = argv._[0];
+      path = argv._[1];
+      keyrule = argv._[2];
+      key = argv._[3];
+      host = argv._[4];
   }
-  var user = credentials[0], pwd =credentials[1];
-  console.log(user);
-  return (users[user] == pwd);
 }
 
-function createTunnel(request, port, host) {
-  console.log('authentictted');
-  // if (!authenticate(request.httpRequest)) {
-    
-  //   request.reject(403);
-  //   return;
-  // }
-  request.accept(null, null, null, function(webSock) {
-    console.log(webSock.remoteAddress + ' connected - Protocol Version ' + webSock.webSocketVersion);
+var server = WebSocket.createRelaySendUri(ns, path);
+var token = WebSocket.createRelayToken('https://' + ns, keyrule, key);
 
-    var tcpSock = new net.Socket();
+//var shell = global.shell = require('./lib/shell');
 
-    tcpSock.on('error', function(err) {
-      webSock.send(JSON.stringify({ status: 'error', details: 'Upstream socket error; ' + err }));
-    });
-
-    tcpSock.on('data', function(data) {
-      console.log('data');
-      webSock.send(data);
-    });
-
-    tcpSock.on('close', function() {
-      webSock.close();
-    });
-    console.log('connection on ' + host + ": " + port);
-    tcpSock.connect(port, host || '127.0.0.1', function() {
-      webSock.on('message', function(msg) {
-        if (msg.type === 'utf8') {
-          console.log('received utf message: ' + msg.utf8Data);
-        } else {
-          console.log('received binary message of length ' + msg.binaryData.length);
-          tcpSock.write(msg.binaryData);
-        }
-      });
-      webSock.send(JSON.stringify({ status: 'ready', details: 'Upstream socket connected' }));
-    });
-
-    webSock.on('close', function() {
-      tcpSock.destroy();
-      console.log(webSock.remoteAddress + ' disconnected');
-    });
-  });
-}
-
-function loadUsers() {
-  var lines = fs.readFileSync('./users.txt', 'utf8');
-  var users = {};
-  lines.split(/[\r\n]+/g).forEach(function(line) {
-    var parts = line.split(':');
-    if (parts.length == 2) {
-      users[parts[0]] = parts[1];
-    }
-  });
-  return users;
-}
-
-function parseAddr(str, addr) {
-  if (str) {
-    var parts = str.split(':');
-    if (parts.length == 1) {
-      if (parts[0] == parseInt(parts[0], 10).toString()) {
-        addr.port = parts[0];
+ tunnel.createTunnel(server, token, host, function(err, server) {
+      if (err) {
+        log(String(err));
       } else {
-        addr.host = parts[0];
+        var id = tunnels.push(server);
+        log('Tunnel created with id: ' + id);
       }
-    } else
-      if (parts.length == 2) {
-        addr = { host: parts[0], port: parts[1] };
-      }
+      //shell.prompt();
+    });
+
+// shell.on('command', function(cmd, args) {
+//   if (cmd == 'help') {
+//     shell.echo('Commands:');
+//     shell.echo('tunnel [localhost:]port [remotehost:]port');
+//     shell.echo('close [tunnel-id]');
+//     shell.echo('exit');
+//     shell.prompt();
+//   } else
+//   if (cmd == 'tunnel') {
+   
+//   } else
+//   if (cmd == 'close') {
+//     var id = parseInt(args[0], 10) - 1;
+//     if (tunnels[id]) {
+//       tunnels[id].close();
+//       tunnels[id] = null;
+//       shell.echo('Tunnel ' + (id + 1) + ' closed.');
+//     } else {
+//       shell.echo('Invalid tunnel id.');
+//     }
+//     shell.prompt();
+//   } else
+//   if (cmd == 'exit') {
+//     shell.exit();
+//   } else {
+//     shell.echo('Invalid command. Type `help` for more information.');
+//     shell.prompt();
+//   }
+// });
+
+log('WebSocket Tunnel Console v0.1');
+log('Remote Host: ' + ns);
+
+// authenticate(function() {
+//   shell.prompt();
+// });
+
+// function authenticate(callback) {
+//   shell.prompt('Username: ', function(user) {
+//     shell.prompt('Password: ', function(pw) {
+//       credentials = user + ':' + pw;
+//       callback();
+//     }, {passwordMode: true});
+//   });
+// }
+
+
+function log(s) {
+  if (global.shell) {
+    global.shell.echo(s);
+  } else {
+    console.log(s);
   }
-  return addr;
 }

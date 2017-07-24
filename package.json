@@ -11,6 +11,6 @@
     "wordwrap": "^0.0.2"
   },
    "scripts": {
-        "start": "node server.js sjkprelay2.servicebus.windows.net test send li5yODGgKlxskfY4vYrTDWtVQM7fYIHe57ySwvKwYDg="
+        "start": "node server.js"
     }
 }

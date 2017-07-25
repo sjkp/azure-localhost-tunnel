@@ -149,7 +149,8 @@
                         "RELAYNAMESPACE": "[variables('namespaceUri')]",
                         "RELAYPATH": "[variables('hybridConnectionName')]",
                         "RELAYRULENAME": "[variables('sendSASKeyName')]",
-                        "RELAYKEY": "[listkeys(variables('sendAuthRuleResourceId'), variables('apiVersion')).primaryKey]"
+                        "RELAYKEY": "[listkeys(variables('sendAuthRuleResourceId'), variables('apiVersion')).primaryKey]",
+                        "PROJECT": "."
                     }
                 },
                 {

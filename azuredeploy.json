@@ -5,7 +5,7 @@
         "name": {
             "type": "string",
             "metadata": {
-                "description": "Name of the Azure Relay Namespace"
+                "description": "Name of the Azure Web App, should be a unique name under *.azurewebsites.ent "
             }
         },
         "appServicePlanSKU": {
@@ -49,8 +49,8 @@
         "hybridConnectionName": "tunnel",
         "namespaceName": "[concat(parameters('name'), uniqueString(resourceGroup().id))]",
         "nameSpaceUri": "[concat(variables('namespaceName'), '.servicebus.windows.net')]",
-        "appServicePlanName": "[concat(parameters('name'),'-farm', uniqueString(resourceGroup().id))]",
-        "webAppName": "[concat(parameters('name'), uniqueString(resourceGroup().id))]"
+        "appServicePlanName": "[concat(parameters('name'),'-farm-', uniqueString(resourceGroup().id))]",
+        "webAppName": "[parameters('name')]"
     },
     "resources": [
         {

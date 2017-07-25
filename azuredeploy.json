@@ -1,0 +1,182 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "name": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Azure Relay Namespace"
+            }
+        },
+        "appServicePlanSKU": {
+            "type": "string",
+            "allowedValues": [
+                "Free",
+                "Shared",
+                "Basic",
+                "Standard"
+            ],
+            "defaultValue": "Free"
+        },
+        "appServicePlanWorkerSize": {
+            "type": "string",
+            "allowedValues": [
+                "0",
+                "1",
+                "2"
+            ],
+            "defaultValue": "0"
+        },
+        "repoURL": {
+            "type":"string",
+            "defaultValue": "https://github.com/sjkp/azure-localhost-tunnel.git"
+        },
+        "branch":{
+            "type":"string",
+            "defaultValue": "master"
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2016-07-01",
+        "defaultSASKeyName": "RootManageSharedAccessKey",
+        "defaultAuthRuleResourceId": "[resourceId('Microsoft.Relay/namespaces/authorizationRules', variables('namespaceName'), variables('defaultSASKeyName'))]",
+        "hybridConnectionResourceId": "[concat(resourceGroup().id, '/providers/Microsoft.Relay/Namespaces/', variables('namespaceName'), '/HybridConnections/', variables('hybridConnectionName'))]",
+        "sendSASKeyName": "send",
+        "sendAuthRuleResourceId": "[concat(variables('hybridConnectionResourceId'), '/authorizationRules/', variables('sendSASKeyName'))]",
+        "listenSASKeyName": "listen",
+        "listenAuthRuleResourceId": "[concat(variables('hybridConnectionResourceId'), '/authorizationRules/', variables('listenSASKeyName'))]",
+        "hybridConnectionName": "tunnel",
+        "namespaceName": "[concat(parameters('name'), uniqueString(resourceGroup().id))]",
+        "nameSpaceUri": "[concat(variables('namespaceName'), '.servicebus.windows.net')]",
+        "appServicePlanName": "[concat(parameters('name'),'-farm', uniqueString(resourceGroup().id))]",
+        "webAppName": "[concat(parameters('name'), uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "[variables('apiVersion')]",
+            "name": "[variables('namespaceName')]",
+            "type": "Microsoft.Relay/Namespaces",
+            "location": "[variables('location')]",
+            "kind": "Relay",
+            "resources": [
+                {
+                    "apiVersion": "[variables('apiVersion')]",
+                    "name": "[variables('hybridConnectionName')]",
+                    "type": "HybridConnections",
+                    "dependsOn": [
+                        "[concat('Microsoft.Relay/namespaces/', variables('namespaceName'))]"
+                    ],
+                    "properties": {
+                        "path": "[variables('hybridConnectionName')]"
+                    },
+                    "resources": [
+                        {
+                            "apiVersion": "[variables('apiVersion')]",
+                            "name": "[variables('sendSASKeyName')]",
+                            "type": "AuthorizationRules",
+                            "dependsOn": [
+                                "[concat('Microsoft.Relay/namespaces/', variables('namespaceName'), '/hybridconnections/', variables('hybridConnectionName'))]"
+                            ],
+                            "location": "[resourceGroup().location]",
+                            "properties": {
+                                "Rights": [
+                                    "Send"
+                                ]
+                            }
+                        },
+                        {
+                            "apiVersion": "[variables('apiVersion')]",
+                            "name": "[variables('listenSASKeyName')]",
+                            "type": "AuthorizationRules",
+                            "dependsOn": [
+                                "[concat('Microsoft.Relay/namespaces/', variables('namespaceName'), '/hybridconnections/', variables('hybridConnectionName'))]"
+                            ],
+                            "location": "[resourceGroup().location]",
+                            "properties": {
+                                "Rights": [
+                                    "Listen"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ],
+            "properties": {}
+        },
+        {
+            "name": "[variables('appServicePlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-06-01",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "appServicePlan"
+            },
+            "properties": {
+                "name": "[variables('appServicePlanName')]",
+                "sku": "[parameters('appServicePlanSKU')]",
+                "workerSize": "[parameters('appServicePlanWorkerSize')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "name": "[variables('webAppName')]",
+            "type": "Microsoft.Web/sites",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-08-01",
+            "dependsOn": [
+                "[concat('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlanName'))]": "Resource",
+                "displayName": "webApp"
+            },
+            "properties": {
+                "name": "[variables('webAppName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', variables('appServicePlanName'))]"
+            },
+            "resources": [
+                {
+                    "apiVersion": "2015-08-01",
+                    "name": "appsettings",
+                    "type": "config",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('webAppName'))]",
+                        "[variables('sendAuthRuleResourceId')]"
+                    ],
+                    "properties": {
+                        "RELAYNAMESPACE": "[variables('namespaceUri')]",
+                        "RELAYPATH": "[variables('hybridConnectionName')]",
+                        "RELAYRULENAME": "[variables('sendSASKeyName')]",
+                        "RELAYKEY": "[listkeys(variables('sendAuthRuleResourceId'), variables('apiVersion')).primaryKey]"
+                    }
+                },
+                {
+                    "apiVersion": "2015-08-01",
+                    "name": "web",
+                    "type": "sourcecontrols",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', variables('webAppName'))]",
+                        "[resourceId('Microsoft.Web/Sites/config', variables('webAppName'), 'appsettings')]"
+                    ],
+                    "properties": {
+                        "RepoUrl": "[parameters('repoURL')]",
+                        "branch": "[parameters('branch')]",
+                        "IsManualIntegration": true
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "PublicUrl": {
+            "type": "string",
+            "value": "[concat('https://', variables('webAppName'), '.azurewebsites.net')]"
+        },
+        "LocalStartCommand": {
+            "type": "string",
+            "value": "[concat('node client.js ', variables('namespaceUri'), ' ', variables('hybridConnectionName'), ' ', variables('listenSASKeyName'), ' ', listkeys(variables('listenAuthRuleResourceId'), variables('apiVersion')).primaryKey, ' localhost [port]')]"
+        }
+    }
+}

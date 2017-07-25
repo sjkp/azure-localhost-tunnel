@@ -33,7 +33,6 @@ if (argv.pidfile) {
   fs.writeFileSync(pidfile, process.pid);
 }
 
-var users = loadUsers();
 
 if (argv._.length < 6) {
   console.log('server.js [namespace] [path] [key-rule] [key] [host] [port]')
@@ -49,67 +48,49 @@ var port = argv._[5];
 
 var wsServer = new WebSocketServer({
   server: WebSocket.createRelayListenUri(ns, path),
-  token: function() {
-    return WebSocket.createRelayToken('http://' + ns, keyrule, key);
+  token: function () {
+    return WebSocket.createRelayToken('https://' + ns, keyrule, key);
   }
 });
 
-wsServer.on('request', function(request) {
+wsServer.on('request', function (request) {
   var url = urlParse(request.resource, true);
   var args = url.pathname.split('/').slice(1);
   var action = args.shift();
   var params = url.query;
-  
+
   console.log(request);
- // if (action == 'tunnel') {
-    console.log('tunnel');
-    //createTunnel(request, params.port, params.host);
-    createTunnel(request, port, host);
- /* } else {
-    request.reject(404);
-  }*/
+  // if (action == 'tunnel') {
+  console.log('tunnel');
+  //createTunnel(request, params.port, params.host);
+  createTunnel(request, port, host);
+  /* } else {
+     request.reject(404);
+   }*/
 });
 
-function authenticate(request) {
-  var encoded = request.headers['authorization'] || '', credentials;
-  encoded = encoded.replace(/Basic /i, '');
-  try {
-    credentials = new Buffer(encoded, 'base64').toString('utf8').split(':');
-  } catch (e) {
-    credentials = [];
-  }
-  var user = credentials[0], pwd =credentials[1];
-  console.log(user);
-  return (users[user] == pwd);
-}
 
 function createTunnel(request, port, host) {
-  console.log('authentictted');
-  // if (!authenticate(request.httpRequest)) {
-    
-  //   request.reject(403);
-  //   return;
-  // }
-  request.accept(null, null, null, function(webSock) {
+  request.accept(null, null, null, function (webSock) {
     console.log(webSock.remoteAddress + ' connected - Protocol Version ' + webSock.webSocketVersion);
 
     var tcpSock = new net.Socket();
 
-    tcpSock.on('error', function(err) {
+    tcpSock.on('error', function (err) {
       webSock.send(JSON.stringify({ status: 'error', details: 'Upstream socket error; ' + err }));
     });
 
-    tcpSock.on('data', function(data) {
+    tcpSock.on('data', function (data) {
       console.log('data');
       webSock.send(data);
     });
 
-    tcpSock.on('close', function() {
+    tcpSock.on('close', function () {
       webSock.close();
     });
     console.log('connection on ' + host + ": " + port);
-    tcpSock.connect(port, host || '127.0.0.1', function() {
-      webSock.on('message', function(msg) {
+    tcpSock.connect(port, host || '127.0.0.1', function () {
+      webSock.on('message', function (msg) {
         if (msg.type === 'utf8') {
           console.log('received utf message: ' + msg.utf8Data);
         } else {
@@ -120,38 +101,9 @@ function createTunnel(request, port, host) {
       webSock.send(JSON.stringify({ status: 'ready', details: 'Upstream socket connected' }));
     });
 
-    webSock.on('close', function() {
+    webSock.on('close', function () {
       tcpSock.destroy();
       console.log(webSock.remoteAddress + ' disconnected');
     });
   });
-}
-
-function loadUsers() {
-  var lines = fs.readFileSync('./users.txt', 'utf8');
-  var users = {};
-  lines.split(/[\r\n]+/g).forEach(function(line) {
-    var parts = line.split(':');
-    if (parts.length == 2) {
-      users[parts[0]] = parts[1];
-    }
-  });
-  return users;
-}
-
-function parseAddr(str, addr) {
-  if (str) {
-    var parts = str.split(':');
-    if (parts.length == 1) {
-      if (parts[0] == parseInt(parts[0], 10).toString()) {
-        addr.port = parts[0];
-      } else {
-        addr.host = parts[0];
-      }
-    } else
-      if (parts.length == 2) {
-        addr = { host: parts[0], port: parts[1] };
-      }
-  }
-  return addr;
 }

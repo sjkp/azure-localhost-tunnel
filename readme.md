@@ -1,58 +1,44 @@
-# TCP tunnels through Azure Relay Hybrid Connections  
+# Localhost Tunnel with Azure Relay Hybrid Connections  
+The project allows you to expose a web service hosted locally to the internet using Azure Relay Hybrid Connections.
 
-This sample illustrates how to create fully transparent TCP socket tunnels using Azure Relay
-Hybrid Connections with Node. This sample is a fork and adaptation of the [node-websocket-tunnel](https://github.com/sstur/node-websocket-tunnel)
-project by [Simon Sturmer](https://github.com/sstur).  
+Using Azure Relay makes it easy to create a tunnel from you local machine to the internet without having to worry about
+firewalls and NAT. The project provides similar functionality like [https://ngrok.io](https://ngrok.io) and [https://localtunnel.me](https://localtunnel.me), but instead of 
+relying on a 3rd party you host the infrastructure required in your own Azure subscription. This provides better security as no 
+3rd party have access to traffic in the tunnel, from my experience it is also faster as you are using your own dedicated infrastructure. 
+Finally and it costs less than 2 cents per hour (traffic above 5GB costs extra, see the [Azure pricing](https://azure.microsoft.com/en-us/pricing/details/service-bus/) for more info).     
 
-Comparing this project and the base project illustrates the differences between the regular WebSocket 
-stack and using the Hybrid Connections variant.  
+To get started you need to deploy the server component and the Azure Relay Hybrid Connection to an Azure subscription. The easiest
+way to do so it to deploy the Azure Resource Manager (ARM) template by clicking the Deploy to Azure button here. 
 
-This tool allows you to tunnel TCP connections over WebSocket protocol using SSL/TLS. It consists of a 
-server agent and a client console. If the server agent is running on a remote machine you can use it 
-as a middle-man to route connections securely to any network host even through firewalls and proxies.
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsjkp%2Fazure-localhost-tunnel%2Fmaster%2Fazuredeploy.json" target="_blank"><img src="http://azuredeploy.net/deploybutton.png"/></a>
 
-## Example use-cases:
- - You are on a restricted network that only allows traffic on port 443
- - You wish to connect securely to a service from a public access point, and cannot use SSH
+The ARM template setups an Azure Web App (on a free hosting plan), that will be your public URL for you local web service. 
+It also creates the Azure Relay Hybrid connection and configures it so it is ready to use. 
 
-Due to WebSocket connections starting out as normal HTTPS, this can be used to tunnel connections through certain
-restrictive firewalls that do not even allow SSH or OpenVPN over port 443.
+After deploying the template you get a node command you need to run locally, together with the url of the web app, which you can 
+use to access your local web service.  
 
-## Usage
+To run node application locally, that controls which port that you want to make available on the public internet you need to clone this repository and run
 
-On a server, run `server.js` specifying the namespace and path for a previously created 
-Azure Relay Hybrid Connection, as well as a SAS rule name and key that grants "Listen" permission 
-for that path:
+`npm install` 
 
-`node server.js myns.servicebus.windows.net mypath listenrule [base64 key]`
+Once the packages are installed you can start the local client component using the command giving from the deployment if should have the format like:
 
-On a client, run `connect.js` specifying namespace and path of an Azure Relay Hybid Connection with
-an active listener, along with a SAS rule name and a key that grants "Send" permission:
+`node client.js [your-relay-namespace].servicebus.windows.net tunnel listen [your-SAS-key] localhost [port]`
 
-`node connect.js myns.servicebus.windows.net mypath sendrule [base64 key]`
+ 
 
-You will be prompted for username/password which the server will be verified against users.txt once you
-establish a connection, then you are presented with a command shell where you can create and destroy tunnels.
+## Security note
+> This project permits everyone on the internet to establish a tunnel 
+> to the TCP network destination that the client is exposing. The project provides no protection of your local web service, 
+> thus only expose web services that doesn't contain confidential information. 
+>
+> If you want to prevent unauthorized access to your
+> local web service you can configure Azure App Service to use Active Directory as an identity provider using the [express settings](https://docs.microsoft.com/en-us/azure/app-service-mobile/app-service-mobile-how-to-configure-active-directory-authentication) in the Azure portal  
 
-> **Security note:**
-> The users.txt file holds username and password for the server in clear text! Mind that this is a 
-> code sample showing that you can flow the "Authorization" header end-to-end in addition to the 
-> security boundary provided by the Relay. It's not a sample that illustrates management of user 
-> secrets. (The base sample uses an unsalted MD5 hash, which is worse as it suggests being a solution)
+## Inspiration 
+This project was inspired by the sample code from [hybrid-connections-websocket-tunnel](https://github.com/Azure/azure-relay/tree/master/samples/Hybrid%20Connections/Node/hyco-websocket-tunnel)  
+that sample illustrates how to create fully transparent TCP socket tunnels using Azure Relay
+Hybrid Connections with Node. 
 
-`> tunnel 3306 8.12.44.238:3306`
 
-This will listen on port 3306 on the client (localhost) and forward connections to remote host 8.12.44.238 via the
-WebSocket server. Destination port, if omitted, will default to source port.
-
-There is no need to manage SSL/TLS certificates for this sample, unlike in the base sample. TLS 
-is handles by the cloud service for both legs of the network connection.  
-
-> ** Security note:**
-> This sample (not Hybrid Connections per-se) permits any authorized client to establish a tunnel 
-> to any TCP network destination that the server can connect to. The client program "connect.js"
-> will expose a raw TCP connectivity path. Be aware that once you have started the *connect.js* 
-> program with a valid send key, have interactively entered a password held in users.txt *and* have explicitly 
-> opened the tunnel (three boundaries), there is no further protection mechanism for the destination 
-> other than what it itself provided as a native security model. (It shouldn't be necessary to make
-> that point, but better be safe)

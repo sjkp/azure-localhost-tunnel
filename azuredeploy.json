@@ -2,7 +2,7 @@
     "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "name": {
+        "siteName": {
             "type": "string",
             "metadata": {
                 "description": "Name of the Azure Web App, should be a unique name under *.azurewebsites.ent "
@@ -47,10 +47,10 @@
         "listenSASKeyName": "listen",
         "listenAuthRuleResourceId": "[concat(variables('hybridConnectionResourceId'), '/authorizationRules/', variables('listenSASKeyName'))]",
         "hybridConnectionName": "tunnel",
-        "namespaceName": "[concat(parameters('name'), uniqueString(resourceGroup().id))]",
+        "namespaceName": "[concat(parameters('siteName'), uniqueString(resourceGroup().id))]",
         "nameSpaceUri": "[concat(variables('namespaceName'), '.servicebus.windows.net')]",
-        "appServicePlanName": "[concat(parameters('name'),'-farm-', uniqueString(resourceGroup().id))]",
-        "webAppName": "[parameters('name')]"
+        "appServicePlanName": "[concat(parameters('siteName'),'-farm-', uniqueString(resourceGroup().id))]",
+        "webAppName": "[parameters('siteName')]"
     },
     "resources": [
         {
